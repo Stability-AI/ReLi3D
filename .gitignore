@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# Build artifacts
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local env files
+.env
+.DS_Store
+
+# Runtime outputs
+outputs/
+
+# Internal prep tooling (kept local, not part of release)
+tools/internal/
+
+# Model assets (local only)
+artifacts/model/config.yaml
+artifacts/model/raw.yaml
+artifacts/model/*.ckpt
+artifacts/model/checkpoints/
+
+# Optional local caches
+*.log

@@ -1,0 +1,35 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.7.0
+torchvision==0.22.0
+
+ninja==1.11.1.4
+wheel==0.45.1
+numpy==1.26.4
+einops==0.8.1
+OmegaConf==2.3.0
+jaxtyping==0.3.2
+typeguard==4.4.2
+
+Pillow==10.4.0
+opencv-python==4.11.0.86
+imageio==2.37.0
+
+safetensors==0.5.3
+huggingface_hub==0.31.2
+transformers==4.51.3
+diffusers==0.33.1
+xformers==0.0.30
+open_clip_torch==2.32.0
+
+trimesh==4.6.8
+gpytoolbox==0.2.0
+xatlas==0.0.10
+PyMCubes==0.1.6
+
+git+https://github.com/NVlabs/tiny-cuda-nn.git@c91138bcd4c6877c8d5e60e483c0581aafc70cce#subdirectory=bindings/torch
+git+https://github.com/NVlabs/nvdiffrast.git@v0.3.3
+
+# optional: quad remeshing
+
+./native/texture_baker/
+./native/uv_unwrapper/

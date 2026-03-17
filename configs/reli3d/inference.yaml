@@ -1,0 +1,277 @@
+system:
+  preprocessor:
+  - cls: src.models.pre_processor.random_conditioning_selector.RandomViewElementConditioningSelector
+    kwargs:
+      min_condition_count: 1
+      max_condition_count: 4
+      training_only: true
+  - cls: src.models.pre_processor.camera.LinearCameraEmbedder
+    kwargs:
+      in_channels: 25
+      out_channels: 1024
+      conditions:
+      - camera-to-world_cond
+      - intrinsics-normed_cond
+  tokenizer:
+  - cls: src.models.tokenizers.image.DINOV2SingleImageTokenizer
+    kwargs:
+      pretrained_model_name_or_path: facebook/dinov2-large
+      width: 512
+      height: 512
+      freeze_backbone_params: false
+      enable_memory_efficient_attention: true
+      enable_gradient_checkpointing: true
+      modulation_key: camera-embedding
+      modulation_zero_init: true
+      modulation_single_layer: true
+      modulation_cond_dim: 1024
+      is_cross_attention_tokenizer: true
+      append_conditioning: true
+      image_key: image_bg_cond
+  - cls: src.models.tokenizers.triplane.TriplaneLearnablePositionalEmbedding
+    kwargs:
+      plane_size: 96
+      num_channels: 1024
+      is_output_tokenizer: true
+      is_input_tokenizer: true
+      tokenize_key: triplane
+      detokenize_key: triplane
+  backbone_cls: src.models.transformers.twostream_interleave.TwoStreamInterleaveTransformer
+  backbone:
+    raw_triplane_channels: 1024
+    triplane_channels: 1024
+    num_attention_heads: 16
+    attention_head_dim: 64
+    raw_image_channels: 1024
+    num_latents: 1792
+    num_blocks: 4
+    num_basic_blocks: 3
+    dropout: 0.0
+    latent_init_std: 0.02
+    triplane_attention: false
+    triplane_resolution: 96
+    triplane_full_attention: true
+    gradient_checkpointing: true
+    mix_latent: true
+    mix_latent_max_tokens: 1298
+    num_experts: 8
+    start_experts_from_block: 2
+    output_key: triplane
+  postprocessor:
+  - cls: src.models.networks.PixelShuffleUpsampleNetwork
+    kwargs:
+      in_channels: 1024
+      out_channels: 40
+      scale_factor: 4
+      conv_layers: 4
+  - cls: src.models.post_processor.transformer_post_processor.TransformerPostProcessor
+    kwargs:
+      tokenizer:
+      - cls: src.models.tokenizers.multi_input_wrapper.RandomMaskTokenizerWrapper
+        kwargs:
+          is_cross_attention_tokenizer: true
+          image_key: image_cond
+          mask_key: opacity_cond
+          dropout_prob: 0.5
+          tokenizer_cls: src.models.tokenizers.image.DINOV2SingleImageTokenizer
+          tokenizer:
+            pretrained_model_name_or_path: facebook/dinov2-small
+            width: 512
+            height: 512
+            freeze_backbone_params: false
+            enable_memory_efficient_attention: true
+            enable_gradient_checkpointing: true
+            modulation_key: camera-embedding
+            modulation_zero_init: true
+            modulation_single_layer: true
+            modulation_cond_dim: 1024
+            is_cross_attention_tokenizer: true
+            append_conditioning: true
+            extra_input_key: opacity_cond
+            extra_input_dim: 1
+      - cls: src.models.tokenizers.vector_proj.LearnableTokenBank
+        kwargs:
+          tokenize_key: token_bank
+          is_input_tokenizer: true
+          token_count: 78
+          token_dim: 256
+          transpose: true
+      - cls: src.models.tokenizers.triplane.SimpleTriplaneTokenizer
+        kwargs:
+          is_cross_attention_tokenizer: true
+          input_dimension: 1024
+          output_dimension: 384
+      input_strategy: token_concat
+      cross_attention_strategy: token_concat
+      backbone_cls: src.models.transformers.transformer_1d.Transformer1D
+      backbone:
+        in_channels: 256
+        out_channels: 1
+        norm_num_groups: 16
+        num_attention_heads: 16
+        attention_head_dim: 64
+        cross_attention_dim: 384
+        num_layers: 4
+        norm_type: layer_norm
+        enable_memory_efficient_attention: true
+        gradient_checkpointing: true
+        output_key: token_output
+      postprocessor:
+      - cls: src.models.post_processor.latent_unpacker.LatentUnpacker
+        kwargs:
+          keys:
+          - reni-latent
+          - illumination-strength
+          - illumination-rotation_repr
+          unpack_key: token_output
+          unpack_shape:
+          - -1
+          shapes:
+          - 49, 3
+          - 1,
+          - 6,
+          out_bias:
+          - 0.0
+          - 1.0
+          - 0.0
+      - cls: src.models.pre_processor.multiview_geometry.RepresentationToRotationMatrix
+        kwargs:
+          in_key: illumination-rotation_repr
+          out_key: illumination-rotation
+      output_keys:
+      - illumination-rotation
+      - illumination-rotation_repr
+      - illumination-strength
+      - reni-latent
+  - cls: src.models.post_processor.copy_renamer.CopyRenamer
+    kwargs:
+      key_in: illumination-z-rotation-rads_cond
+      key_out: illumination-z-rotation-rads
+  - cls: src.models.pre_processor.reni_latent_to_env.ReniLatentToEnvProcessor
+    kwargs:
+      reni_env_config:
+        reni_config:
+          weights: load/reni/reni++L49.safetensors
+          axis_of_invariance: z
+          conditioning: Attention
+          encoded_input: Directions
+          equivariance: SO2
+          first_omega_0: 30.0
+          fixed_decoder: true
+          hidden_features: 128
+          hidden_layers: 9
+          hidden_omega_0: 30.0
+          invariant_function: VN
+          last_layer_linear: true
+          latent_dim: 49
+          mapping_features: 128
+          mapping_layers: 5
+          num_attention_heads: 8
+          num_attention_layers: 6
+          old_implementation: false
+          out_features: 3
+          output_activation: exp
+          positional_encoding: NeRF
+        parametrization: spherical
+        resolution: 64
+  material_cls: src.models.materials.multiple_importance_sampling_material.MultipleImportanceMonteCarloEnvironmentShader
+  material:
+    sampling_stategies:
+    - cls: src.models.materials.monte_carlo_samplers.illumination.PiecewiseDistributionEnvironmentSkySampler
+      kwargs:
+        num_samples: 20
+    - cls: src.models.materials.monte_carlo_samplers.material.GGXVNDFAntitheticMaterialSampler
+      kwargs:
+        num_samples: 40
+        perceptual_roughness: false
+    - cls: src.models.materials.monte_carlo_samplers.material.CosineHemisphereMaterialSampler
+      kwargs:
+        num_samples: 4
+    perceptual_roughness: false
+    normal_type: radial_bump
+    radial_up_axis: 'y'
+    tone_mapping_cls: src.utils.tonemapping.AgXToneMapping
+    tone_mapping:
+      color_space_type: src.utils.color_space.LinearToSRGBColorSpaceConversion
+    sampler: halton
+    sample_rotation: true
+    radiance_clamping_upper_limit: 20.0
+    use_power_heuristic: false
+  background_cls: src.models.background.solid_color_background.SolidColorBackground
+  background:
+    color:
+    - 0.0
+    - 0.0
+    - 0.0
+  object_representation_cls: src.models.object_representations.volumetric.triplane_representation.VolumetricTriplaneRepresentation
+  object_representation:
+    multi_head_mlp:
+      only_heads: true
+      n_neurons: 64
+      activation: silu
+      heads:
+      - name: density
+        out_channels: 1
+        n_hidden_layers: 2
+      - name: basecolor
+        out_channels: 3
+        n_hidden_layers: 3
+        output_activation: sigmoid
+      - name: surface-normal
+        out_channels: 3
+        n_hidden_layers: 3
+        output_activation: normalize_channel_last
+        init_weights: normal_/0/0.01
+        init_bias: constant_/0.0
+        out_bias:
+        - 0.0
+        - 0.0
+        - 1.0
+      - name: vertex-offset
+        out_channels: 3
+        n_hidden_layers: 2
+        init_weights: normal_/0/0.01
+        init_bias: constant_/0.0
+      - name: roughness
+        out_channels: 1
+        n_hidden_layers: 2
+        output_activation: sigmoid/0.1/1.0
+      - name: metallic
+        out_channels: 1
+        n_hidden_layers: 2
+        output_activation: sigmoid
+      - name: flexicubes-weight
+        out_channels: 16
+        n_hidden_layers: 1
+        output_activation: linear
+    isosurface_resolution: 80
+    isosurface_threshold: 10.0
+    isosurface_method: flexicubes
+    additional_indices_keys:
+      weight_n: flexicubes-weight
+    indices_merging_method: mlp
+    indices_merging_mlp:
+      only_heads: true
+      n_neurons: 64
+      activation: silu
+      in_channels: 16
+      heads:
+      - name: flexicubes-weight
+        out_channels: 21
+        n_hidden_layers: 2
+        output_activation: linear
+        out_multiplier: 0.1
+        init_weights: normal_/0/0.05
+        init_bias: constant_/0.0
+    flexicubes_weight_scale: 0.5
+    flexicubes_qef_reg_scale: 0.001
+    use_deformation: true
+    triplane_features: 40
+    radius: 0.87
+    feature_reduction: concat
+    shape_activation: trunc_exp
+    density_bias: -1.0
+  renderer_cls: src.models.renderers.volumetric_mesh_rasterizer.MeshRasterizer
+  renderer:
+    batch_size: 1
+    rasterizer: drtk
