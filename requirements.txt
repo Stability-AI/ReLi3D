@@ -1,5 +1,5 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.7.0
+torch==2.8.0
 torchvision==0.22.0
 
 ninja==1.11.1.4
