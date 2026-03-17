@@ -3,7 +3,7 @@ torch==2.7.0
 torchvision==0.22.0
 
 ninja==1.11.1.4
-wheel==0.45.1
+wheel==0.46.2
 numpy==1.26.4
 einops==0.8.1
 OmegaConf==2.3.0
