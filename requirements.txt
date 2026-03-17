@@ -10,7 +10,7 @@ OmegaConf==2.3.0
 jaxtyping==0.3.2
 typeguard==4.4.2
 
-Pillow==10.4.0
+Pillow==12.1.1
 opencv-python==4.11.0.86
 imageio==2.37.0
 
