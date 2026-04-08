@@ -16,7 +16,7 @@ imageio==2.37.0
 
 safetensors==0.5.3
 huggingface_hub==0.31.2
-transformers==4.51.3
+transformers==5.0.0rc3
 diffusers==0.33.1
 xformers==0.0.30
 open_clip_torch==2.32.0
